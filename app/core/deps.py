@@ -1,52 +1,52 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.database import get_db
 from app.models.user import User
 from app.core.config import SECRET_KEY, ALGORITHM
-from app.models.permission import Permission, RoleHasPermission
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
+# ---------------------------------
+# Swagger Authorize button support
+# ---------------------------------
+security = HTTPBearer()
+
+
+# ---------------------------------
+# Get current user from JWT
+# ---------------------------------
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
-):
+) :
+
+    token = credentials.credentials
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
+        user_id: str  = payload.get("sub")
+
+        if user_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token payload"
+                )
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    user = db.query(User).filter(User.id == UUID(user_id)).first()
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token"
+            )   
+    user = db.query(User).filter(User.id == UUID(user_id)).first() 
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invalid token payload"
+            )
     return user
 
+   
 
-def require_permission(permission_name: str):
-    def checker(current_user: User, db: Session):
-        permission = (
-            db.query(Permission)
-            .join(RoleHasPermission)
-            .filter(
-                RoleHasPermission.role_id == current_user.role_id,
-                Permission.name == permission_name
-            )
-            .first()
-        )
 
-        if not permission:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permission denied"
-            )
-
-    return checker

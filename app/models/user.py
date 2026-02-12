@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy import Column, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import Base
 
 class User(Base):
@@ -13,6 +13,9 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
 
     role_id = Column(UUID(as_uuid=True), ForeignKey("roles.id"))
-    role = relationship("Role")
+    role = relationship("Role", back_populates="users")
+    
+    # ✅ ADD THIS - Bidirectional relationship with tasks
+    tasks = relationship("Task", back_populates="owner", cascade="all, delete-orphan")
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
